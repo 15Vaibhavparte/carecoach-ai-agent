@@ -1,0 +1,8 @@
+{
+  "surgery_name": "Knee Arthroscopy",
+  "timeline": [
+    { "day": 1, "tasks": "Focus on rest. Keep leg elevated. Apply ice for 20 minutes every 2 hours." },
+    { "day": 2, "tasks": "Continue elevation and icing. Begin gentle ankle pump exercises (10 repetitions every hour)." },
+    { "day": 3, "tasks": "Use crutches for any movement. You can attempt a short, slow walk around your home." }
+  ]
+}
