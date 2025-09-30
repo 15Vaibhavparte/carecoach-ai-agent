@@ -22,6 +22,7 @@ from models import (
 from config import config
 from image_validation import ImageValidator
 from image_preprocessing import ImagePreprocessor, ImageOptimizationLevel
+from vision_client import VisionModelClient, MedicationExtractor
 
 # Configure logging
 logger = logging.getLogger()
@@ -31,10 +32,10 @@ class ImageAnalysisHandler:
     """Core handler for image analysis operations"""
     
     def __init__(self):
-        self.bedrock_client = boto3.client('bedrock-runtime', region_name=config.AWS_REGION)
-        self.model_id = config.BEDROCK_MODEL_ID
         self.image_validator = ImageValidator()
         self.image_preprocessor = ImagePreprocessor(ImageOptimizationLevel.BASIC)
+        self.vision_client = VisionModelClient()
+        self.medication_extractor = MedicationExtractor()
     
     def validate_image(self, image_data: str, max_size: int, allowed_formats: List[str]) -> ImageValidationResult:
         """Validate image format and size using the comprehensive validator"""
@@ -54,109 +55,16 @@ class ImageAnalysisHandler:
     
     def process_image_with_vision_model(self, image_data: str, prompt: str) -> VisionModelResponse:
         """Send image to vision model for analysis"""
-        start_time = time.time()
+        # Detect media type for proper API call
+        media_type = self.vision_client.detect_media_type(image_data)
         
-        try:
-            # Prepare the request for Claude 3 Sonnet
-            request_body = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": config.MAX_TOKENS,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",  # Will need to detect actual type in future enhancement
-                                    "data": image_data
-                                }
-                            }
-                        ]
-                    }
-                ]
-            }
-            
-            response = self.bedrock_client.invoke_model(
-                modelId=self.model_id,
-                body=json.dumps(request_body)
-            )
-            
-            response_body = json.loads(response['body'].read())
-            processing_time = time.time() - start_time
-            
-            return VisionModelResponse(
-                success=True,
-                response_text=response_body.get('content', [{}])[0].get('text', ''),
-                usage=response_body.get('usage', {}),
-                processing_time=processing_time
-            )
-            
-        except Exception as e:
-            processing_time = time.time() - start_time
-            logger.error(f"Vision model processing failed: {str(e)}")
-            return VisionModelResponse(
-                success=False,
-                error=f"Vision model processing failed: {str(e)}",
-                processing_time=processing_time
-            )
+        # Use the vision client to analyze the image
+        return self.vision_client.analyze_image(image_data, prompt, media_type)
     
     def extract_medication_info(self, vision_response: str) -> MedicationIdentification:
         """Parse vision model response to extract medication information"""
-        try:
-            # This is a simplified extraction - in practice, this would be more sophisticated
-            # and might use structured prompting or additional parsing logic
-            
-            medication_name = ""
-            dosage = ""
-            confidence = 0.0
-            image_quality = ImageQuality.UNKNOWN.value
-            
-            # Basic parsing logic (to be enhanced in later tasks)
-            response_lower = vision_response.lower()
-            
-            # Simple confidence assessment based on response content
-            if any(phrase in response_lower for phrase in ["clearly visible", "confident", "high confidence"]):
-                confidence = 0.9
-                image_quality = ImageQuality.GOOD.value
-            elif any(phrase in response_lower for phrase in ["likely", "appears to be", "moderate confidence"]):
-                confidence = 0.7
-                image_quality = ImageQuality.FAIR.value
-            elif any(phrase in response_lower for phrase in ["unclear", "difficult", "low confidence", "blurry"]):
-                confidence = 0.3
-                image_quality = ImageQuality.POOR.value
-            else:
-                confidence = 0.5
-                image_quality = ImageQuality.FAIR.value
-            
-            # Extract medication name (simplified - will be enhanced in later tasks)
-            if "medication" in response_lower:
-                # This is a placeholder - actual implementation would use more sophisticated parsing
-                medication_name = "Unknown"
-                dosage = "Unknown"
-            
-            return MedicationIdentification(
-                medication_name=medication_name,
-                dosage=dosage,
-                confidence=confidence,
-                image_quality=image_quality,
-                raw_response=vision_response
-            )
-            
-        except Exception as e:
-            logger.error(f"Failed to extract medication info: {str(e)}")
-            return MedicationIdentification(
-                medication_name="",
-                dosage="",
-                confidence=0.0,
-                image_quality=ImageQuality.POOR.value,
-                raw_response=vision_response
-            )
+        # Use the dedicated medication extractor
+        return self.medication_extractor.extract_medication_info(vision_response)
     
     def call_drug_info_tool(self, drug_name: str) -> DrugInfoResult:
         """Call the existing DrugInfoTool to get detailed drug information"""

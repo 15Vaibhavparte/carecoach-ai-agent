@@ -16,6 +16,7 @@
 
 
 
+
   - [x] 2.1 Create image validation utilities
 
 
@@ -34,15 +35,20 @@
     - Write unit tests for preprocessing functions
     - _Requirements: 1.2, 6.2_
 
-- [ ] 3. Integrate vision model for medication identification
-  - [ ] 3.1 Set up vision model API client
+- [x] 3. Integrate vision model for medication identification
+
+  - [x] 3.1 Set up vision model API client
+
+
     - Create AWS Bedrock client configuration for multimodal models
     - Implement vision model API calling functions
     - Write prompt templates for medication identification
     - Create unit tests with mocked API responses
     - _Requirements: 2.1, 2.2, 2.3_
 
-  - [ ] 3.2 Implement medication extraction logic
+  - [x] 3.2 Implement medication extraction logic
+
+
     - Write functions to parse vision model responses
     - Create medication name and dosage extraction utilities
     - Implement confidence scoring and validation
