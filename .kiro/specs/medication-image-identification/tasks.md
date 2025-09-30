@@ -37,6 +37,7 @@
 
 - [x] 3. Integrate vision model for medication identification
 
+
   - [x] 3.1 Set up vision model API client
 
 
@@ -54,16 +55,25 @@
     - Implement confidence scoring and validation
     - Write unit tests for extraction logic with sample responses
     - _Requirements: 2.2, 2.4, 2.5_
+-
 
-- [ ] 4. Integrate with existing DrugInfoTool
-  - [ ] 4.1 Create DrugInfoTool integration module
+- [x] 4. Integrate with existing DrugInfoTool
+
+
+
+
+  - [x] 4.1 Create DrugInfoTool integration module
+
+
     - Write functions to call existing DrugInfoTool lambda handler
     - Implement proper event formatting for DrugInfoTool compatibility
     - Create response parsing and error handling for DrugInfoTool calls
     - Write unit tests for integration functions
     - _Requirements: 3.1, 3.2, 3.4_
 
-  - [ ] 4.2 Implement response synthesis
+  - [x] 4.2 Implement response synthesis
+
+
     - Write functions to combine vision results with drug information
     - Create response formatting utilities for user-friendly output
     - Implement data validation and sanitization for combined responses
