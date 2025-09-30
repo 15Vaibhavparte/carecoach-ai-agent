@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Any
 import logging
 
 # Import local modules
-from .models import (
+from models import (
     ImageAnalysisRequest,
     MedicationIdentification,
     CombinedResponse,
@@ -19,7 +19,9 @@ from .models import (
     VisionModelError,
     DrugInfoError
 )
-from .config import config
+from config import config
+from image_validation import ImageValidator
+from image_preprocessing import ImagePreprocessor, ImageOptimizationLevel
 
 # Configure logging
 logger = logging.getLogger()
@@ -31,48 +33,23 @@ class ImageAnalysisHandler:
     def __init__(self):
         self.bedrock_client = boto3.client('bedrock-runtime', region_name=config.AWS_REGION)
         self.model_id = config.BEDROCK_MODEL_ID
+        self.image_validator = ImageValidator()
+        self.image_preprocessor = ImagePreprocessor(ImageOptimizationLevel.BASIC)
     
     def validate_image(self, image_data: str, max_size: int, allowed_formats: List[str]) -> ImageValidationResult:
-        """Validate image format and size"""
+        """Validate image format and size using the comprehensive validator"""
         try:
-            # Decode base64 to check validity and size
-            image_bytes = base64.b64decode(image_data)
-            
-            # Check file size
-            if len(image_bytes) > max_size:
-                return ImageValidationResult(
-                    valid=False,
-                    error=f"Image size ({len(image_bytes)} bytes) exceeds maximum allowed size ({max_size} bytes)",
-                    size=len(image_bytes)
-                )
-            
-            # Basic format validation
-            if len(image_bytes) < config.MIN_IMAGE_SIZE:
-                return ImageValidationResult(
-                    valid=False,
-                    error=config.ERROR_MESSAGES['file_too_small'],
-                    size=len(image_bytes)
-                )
-            
-            # Basic format detection (simplified)
-            format_detected = "unknown"
-            if image_bytes.startswith(b'\xff\xd8\xff'):
-                format_detected = "jpeg"
-            elif image_bytes.startswith(b'\x89PNG'):
-                format_detected = "png"
-            elif image_bytes.startswith(b'RIFF') and b'WEBP' in image_bytes[:12]:
-                format_detected = "webp"
-            
-            return ImageValidationResult(
-                valid=True,
-                size=len(image_bytes),
-                format_detected=format_detected
-            )
+            # Use the new comprehensive image validator
+            validator = ImageValidator(max_size=max_size, allowed_formats=allowed_formats)
+            return validator.validate_image(image_data)
             
         except Exception as e:
+            logger.error(f"Image validation failed: {str(e)}")
             return ImageValidationResult(
                 valid=False,
-                error=f"Invalid base64 image data: {str(e)}"
+                error=f"Image validation failed: {str(e)}",
+                size=0,
+                format_detected='unknown'
             )
     
     def process_image_with_vision_model(self, image_data: str, prompt: str) -> VisionModelResponse:
@@ -320,6 +297,38 @@ def lambda_handler(event, context):
                 "suggestion": f"Please ensure your image is in {config.get_supported_formats_string()} format and under {config.get_max_size_mb()}MB."
             })
         
+        # Preprocess the image for optimal vision model input
+        try:
+            success, error, preprocessed_image = handler.image_preprocessor.base64_to_image(image_data)
+            if not success:
+                return build_response(event, {
+                    "error": f"Image preprocessing failed: {error}",
+                    "suggestion": "Please try again with a different image."
+                })
+            
+            # Assess image quality
+            quality, quality_metrics = handler.image_preprocessor.assess_image_quality(preprocessed_image)
+            
+            # Optimize image for vision model
+            success, optimization_message, optimized_image = handler.image_preprocessor.optimize_for_vision_model(preprocessed_image)
+            if not success:
+                logger.warning(f"Image optimization failed: {optimization_message}")
+                optimized_image = preprocessed_image  # Use original if optimization fails
+            
+            # Convert optimized image back to base64
+            success, error, optimized_base64 = handler.image_preprocessor.image_to_base64(optimized_image, 'JPEG', 85)
+            if not success:
+                logger.warning(f"Failed to convert optimized image to base64: {error}")
+                optimized_base64 = image_data  # Use original if conversion fails
+            else:
+                image_data = optimized_base64  # Use optimized image for vision model
+                
+        except Exception as e:
+            logger.warning(f"Image preprocessing encountered an error: {str(e)}")
+            # Continue with original image if preprocessing fails
+            quality = ImageQuality.UNKNOWN
+            quality_metrics = {}
+        
         # Process image with vision model
         vision_result = handler.process_image_with_vision_model(image_data, prompt)
         
@@ -351,6 +360,9 @@ def lambda_handler(event, context):
         combined_response.add_metadata('vision_model_usage', vision_result.usage)
         combined_response.add_metadata('image_size', validation_result.size)
         combined_response.add_metadata('image_format', validation_result.format_detected)
+        combined_response.add_metadata('image_quality', quality.value if 'quality' in locals() else 'unknown')
+        if 'quality_metrics' in locals() and quality_metrics:
+            combined_response.add_metadata('quality_metrics', quality_metrics)
         
         return build_response(event, combined_response.to_dict())
         
