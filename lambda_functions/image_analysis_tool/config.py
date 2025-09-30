@@ -15,7 +15,7 @@ class Config:
     MIN_IMAGE_SIZE = 100  # Minimum reasonable image size in bytes
     
     # Vision model settings
-    BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-sonnet-20240229-v1:0')
+    BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'meta.llama3-2-11b-instruct-v1:0')
     MAX_TOKENS = int(os.environ.get('MAX_TOKENS', 1000))
     VISION_TIMEOUT = int(os.environ.get('VISION_TIMEOUT', 30))  # seconds
     

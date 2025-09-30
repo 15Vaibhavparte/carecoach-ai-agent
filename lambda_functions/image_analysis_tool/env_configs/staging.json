@@ -1,0 +1,25 @@
+{
+  "Environment": {
+    "Variables": {
+      "ENVIRONMENT": "staging",
+      "AWS_REGION": "us-east-1",
+      "BEDROCK_MODEL_ID": "meta.llama3-2-11b-instruct-v1:0",
+      "MAX_IMAGE_SIZE": "10485760",
+      "MAX_TOKENS": "1000",
+      "VISION_TIMEOUT": "30",
+      "DRUG_INFO_TIMEOUT": "10",
+      "HIGH_CONFIDENCE_THRESHOLD": "0.8",
+      "LOW_CONFIDENCE_THRESHOLD": "0.3",
+      "LOG_LEVEL": "INFO",
+      "DEBUG_MODE": "false"
+    }
+  },
+  "MemorySize": 768,
+  "Timeout": 240,
+  "ReservedConcurrencyLimit": 8,
+  "Tags": {
+    "Project": "CareCoach",
+    "Component": "ImageAnalysis",
+    "Environment": "staging"
+  }
+}

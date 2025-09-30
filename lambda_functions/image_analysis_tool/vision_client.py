@@ -59,27 +59,18 @@ class VisionModelClient:
             if not prompt:
                 prompt = self.prompt_templates['standard']
             
-            # Prepare the request for Claude 3 Sonnet
+            # Prepare the request for Meta Llama 3.2 11B Instruct (multimodal)
             request_body = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": config.MAX_TOKENS,
-                "messages": [
+                "prompt": f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{prompt}\n\n[Image: {media_type} base64 data provided]<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                "max_gen_len": config.MAX_TOKENS,
+                "temperature": 0.1,
+                "top_p": 0.9,
+                "images": [
                     {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": media_type,
-                                    "data": image_data
-                                }
-                            }
-                        ]
+                        "format": media_type.split('/')[-1],  # Extract format from media_type
+                        "source": {
+                            "bytes": image_data
+                        }
                     }
                 ]
             }
@@ -94,18 +85,18 @@ class VisionModelClient:
             response_body = json.loads(response['body'].read())
             processing_time = time.time() - start_time
             
-            # Extract response text
-            content = response_body.get('content', [])
-            response_text = ""
-            if content and len(content) > 0:
-                response_text = content[0].get('text', '')
+            # Extract response text from Meta Llama response format
+            response_text = response_body.get('generation', '')
+            if not response_text:
+                # Fallback to other possible response fields
+                response_text = response_body.get('outputs', [{}])[0].get('text', '') if response_body.get('outputs') else ''
             
             logger.info(f"Vision model response received in {processing_time:.2f}s")
             
             return VisionModelResponse(
                 success=True,
                 response_text=response_text,
-                usage=response_body.get('usage', {}),
+                usage=response_body.get('prompt_token_count', {}),  # Meta Llama usage format
                 processing_time=processing_time
             )
             
