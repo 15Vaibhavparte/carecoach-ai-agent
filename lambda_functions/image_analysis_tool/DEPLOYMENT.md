@@ -313,6 +313,235 @@ aws lambda update-function-configuration \
 4. **Encryption**: All data encrypted in transit and at rest
 5. **Access Control**: Least privilege IAM permissions
 
+## Configuration Examples
+
+### Sample Environment Configuration Files
+
+#### development.json
+```json
+{
+  "ENVIRONMENT": "development",
+  "AWS_REGION": "us-east-1",
+  "BEDROCK_MODEL_ID": "meta.llama3-2-11b-instruct-v1:0",
+  "MAX_IMAGE_SIZE": 5242880,
+  "VISION_TIMEOUT": 20,
+  "LOG_LEVEL": "DEBUG",
+  "LOW_CONFIDENCE_THRESHOLD": 0.6,
+  "HIGH_CONFIDENCE_THRESHOLD": 0.8,
+  "DRUG_INFO_FUNCTION_NAME": "drug-info-tool-dev"
+}
+```
+
+#### production.json
+```json
+{
+  "ENVIRONMENT": "production",
+  "AWS_REGION": "us-east-1",
+  "BEDROCK_MODEL_ID": "meta.llama3-2-11b-instruct-v1:0",
+  "MAX_IMAGE_SIZE": 10485760,
+  "VISION_TIMEOUT": 30,
+  "LOG_LEVEL": "INFO",
+  "LOW_CONFIDENCE_THRESHOLD": 0.7,
+  "HIGH_CONFIDENCE_THRESHOLD": 0.85,
+  "DRUG_INFO_FUNCTION_NAME": "drug-info-tool"
+}
+```
+
+### Lambda Function Configuration
+
+#### Memory and Timeout Settings
+```bash
+# Development
+aws lambda update-function-configuration \
+    --function-name image-analysis-tool-dev \
+    --memory-size 512 \
+    --timeout 180
+
+# Production
+aws lambda update-function-configuration \
+    --function-name image-analysis-tool \
+    --memory-size 1024 \
+    --timeout 300
+```
+
+#### Environment Variables
+```bash
+aws lambda update-function-configuration \
+    --function-name image-analysis-tool \
+    --environment Variables='{
+        "ENVIRONMENT":"production",
+        "AWS_REGION":"us-east-1",
+        "BEDROCK_MODEL_ID":"meta.llama3-2-11b-instruct-v1:0",
+        "MAX_IMAGE_SIZE":"10485760",
+        "LOG_LEVEL":"INFO"
+    }'
+```
+
+### VPC Configuration (Optional)
+
+If deploying within a VPC:
+
+```bash
+aws lambda update-function-configuration \
+    --function-name image-analysis-tool \
+    --vpc-config SubnetIds=subnet-12345678,subnet-87654321,SecurityGroupIds=sg-12345678
+```
+
+### Reserved Concurrency
+
+```bash
+# Set reserved concurrency for production
+aws lambda put-reserved-concurrency-configuration \
+    --function-name image-analysis-tool \
+    --reserved-concurrent-executions 10
+```
+
+## Advanced Deployment Options
+
+### Blue/Green Deployment
+
+```bash
+# Create alias for current version
+aws lambda create-alias \
+    --function-name image-analysis-tool \
+    --name LIVE \
+    --function-version $LATEST
+
+# Deploy new version
+make deploy
+
+# Update alias to new version after testing
+aws lambda update-alias \
+    --function-name image-analysis-tool \
+    --name LIVE \
+    --function-version $LATEST
+```
+
+### Canary Deployment
+
+```bash
+# Create weighted alias for gradual rollout
+aws lambda create-alias \
+    --function-name image-analysis-tool \
+    --name CANARY \
+    --function-version 1 \
+    --routing-config AdditionalVersionWeights='{
+        "2": 0.1
+    }'
+```
+
+### Lambda Layers
+
+For large dependencies, use Lambda layers:
+
+```bash
+# Create layer for common dependencies
+zip -r pillow-layer.zip python/
+aws lambda publish-layer-version \
+    --layer-name pillow-image-processing \
+    --zip-file fileb://pillow-layer.zip \
+    --compatible-runtimes python3.9
+
+# Update function to use layer
+aws lambda update-function-configuration \
+    --function-name image-analysis-tool \
+    --layers arn:aws:lambda:us-east-1:123456789012:layer:pillow-image-processing:1
+```
+
+## Automated Deployment Pipeline
+
+### GitHub Actions Example
+
+```yaml
+name: Deploy Image Analysis Tool
+
+on:
+  push:
+    branches: [main]
+    paths: ['lambda_functions/image_analysis_tool/**']
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          cd lambda_functions/image_analysis_tool
+          pip install -r requirements.txt
+      
+      - name: Run tests
+        run: |
+          cd lambda_functions/image_analysis_tool
+          python -m pytest
+      
+      - name: Deploy to AWS
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          cd lambda_functions/image_analysis_tool
+          python deploy.py --environment production
+```
+
+### AWS CodePipeline Example
+
+```json
+{
+  "pipeline": {
+    "name": "image-analysis-tool-pipeline",
+    "roleArn": "arn:aws:iam::123456789012:role/CodePipelineRole",
+    "stages": [
+      {
+        "name": "Source",
+        "actions": [
+          {
+            "name": "SourceAction",
+            "actionTypeId": {
+              "category": "Source",
+              "owner": "AWS",
+              "provider": "S3",
+              "version": "1"
+            },
+            "configuration": {
+              "S3Bucket": "my-source-bucket",
+              "S3ObjectKey": "source.zip"
+            },
+            "outputArtifacts": [{"name": "SourceOutput"}]
+          }
+        ]
+      },
+      {
+        "name": "Deploy",
+        "actions": [
+          {
+            "name": "DeployAction",
+            "actionTypeId": {
+              "category": "Deploy",
+              "owner": "AWS",
+              "provider": "CloudFormation",
+              "version": "1"
+            },
+            "configuration": {
+              "ActionMode": "CREATE_UPDATE",
+              "StackName": "image-analysis-tool-stack",
+              "TemplatePath": "SourceOutput::template.yaml"
+            },
+            "inputArtifacts": [{"name": "SourceOutput"}]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
 ## Support
 
 For deployment issues:
@@ -320,4 +549,15 @@ For deployment issues:
 2. Verify IAM permissions
 3. Validate configuration files
 4. Run deployment validation tests
-5. Contact development team with error details
+5. Review this troubleshooting guide
+6. Contact development team with error details
+
+### Support Information to Provide
+
+When contacting support, include:
+- Deployment environment (dev/staging/prod)
+- Error messages and stack traces
+- CloudWatch log excerpts
+- Function configuration details
+- Steps to reproduce the issue
+- Expected vs actual behavior

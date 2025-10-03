@@ -47,6 +47,62 @@ Follows the same Bedrock Agent pattern as DrugInfoTool:
 - `requests` - HTTP client for API calls
 - `Pillow` - Image processing capabilities
 
-## Usage
+## Documentation
+
+### Quick Start
+- **[API Documentation](API_DOCUMENTATION.md)** - Complete API reference and request/response formats
+- **[Usage Examples](USAGE_EXAMPLES.md)** - Code examples in Python, JavaScript, cURL, and more
+- **[Deployment Guide](DEPLOYMENT.md)** - Step-by-step deployment instructions
+
+### Configuration and Troubleshooting
+- **[Configuration Guide](CONFIGURATION.md)** - Environment settings and performance tuning
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common issues and solutions
+
+### Testing and Validation
+- **[End-to-End Validation Report](END_TO_END_VALIDATION_REPORT.md)** - Comprehensive testing results
+
+## Quick Usage
 
 The Lambda handler accepts base64-encoded images and returns structured medication identification results combined with detailed drug information from the existing DrugInfoTool.
+
+### Basic Example
+
+```python
+import boto3
+import base64
+import json
+
+# Encode image
+with open('medication.jpg', 'rb') as f:
+    image_data = base64.b64encode(f.read()).decode('utf-8')
+
+# Prepare request
+payload = {
+    "input": {
+        "RequestBody": {
+            "content": {
+                "application/json": {
+                    "properties": [
+                        {"name": "image_data", "value": image_data}
+                    ]
+                }
+            }
+        }
+    }
+}
+
+# Invoke function
+lambda_client = boto3.client('lambda')
+response = lambda_client.invoke(
+    FunctionName='image-analysis-tool',
+    Payload=json.dumps(payload)
+)
+
+# Parse results
+result = json.loads(response['Payload'].read())
+if result['success']:
+    medication = result['medication_identification']
+    print(f"Identified: {medication['medication_name']} ({medication['dosage']})")
+```
+
+For complete examples and advanced usage, see the [Usage Examples](USAGE_EXAMPLES.md) documentation.
